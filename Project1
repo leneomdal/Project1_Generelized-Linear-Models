@@ -1,0 +1,130 @@
+
+library(pracma)
+library(ggplot2)
+
+vec2diag = function(vec) {
+  m = diag(length(vec))
+  for (i in 1:length(vec)) {
+    m[i,i] = vec[i]
+  }
+  return (m)
+}
+
+diag2vec = function(m) {
+  vec = rep(0, nrow(m))
+  for (i in 1:nrow(m)) {
+    vec[i] = m[i,i]
+  }
+  return (vec)
+}
+
+myglm = function(formula, data, start = rep(0, ncol(model.matrix(formula, data)))) {
+  n = nrow(data)
+  X = model.matrix(formula, data)
+  Y = matrix(data$y)
+  beta = matrix(start)
+  delta.beta = 1
+  counter = 0
+  while (Norm(delta.beta) > 1e-8) {
+    lambda = matrix(exp(X %*% beta))              
+    F.beta = t(X)  %*% vec2diag(lambda) %*% X
+    s.beta = t(X) %*% (Y - lambda)
+    delta.beta = solve(F.beta, s.beta)
+    beta = beta + delta.beta
+    counter = counter + 1
+  }
+  logY = ifelse(Y == 0, 1, log(Y))
+  deviance = 2 * sum(Y * logY - Y - Y * log(lambda) + lambda)
+  vcov = solve(F.beta)
+  std.errors = sqrt(diag2vec(vcov))
+  Coefficients = matrix(c(beta, std.errors), nrow = length(beta))
+  colnames(Coefficients) = c("Estimate", "Std. Error")
+  rownames(Coefficients) = rownames(beta)
+  return(list("Coefficients" = Coefficients, "Deviance" = deviance, "vcov" = vcov, 
+              p = length(beta), n = length(Y)))
+}
+
+mymodel = myglm(y ~ t, data, start = c(0.1,0.001))
+mymodel$Coefficients
+mymodel$Deviance
+mymodel$vcov
+
+
+#c)
+n = 1000
+real_beta1 = 0.1
+real_beta0 = 0
+t = runif(n, 0, 10)
+y = rpois(n, exp(real_beta0 + real_beta1 * t))
+data = data.frame(y = y, t = t)
+data
+
+#Checking that we get the same coefficients from the glm function as from the myglm function
+model_compare = glm(y ~ t, family = "poisson", data = data)
+model_compare$coefficients
+model_compare$deviance
+model_compare$vcov
+summary(model_compare)
+
+#2c)
+
+data = 1
+data
+
+load(url("https://www.math.ntnu.no/emner/TMA4315/2020h/hoge-veluwe.Rdata"))
+df.birds = data
+df.birds
+model = myglm(y ~ t + I(t^2), data = df.birds)
+model
+
+#2d)
+
+model.wo.t2 = myglm(y ~ t, data = df.birds)
+
+compare.nested.models = function(model0, model1) {
+  LRT =  model0$Deviance - model1$Deviance
+  r = model1$p - model0$p
+  probLRT = pchisq(LRT, df = r, lower.tail = FALSE)
+  if (probLRT == 0) probLRT = "<1e^-16"
+  return(list("LRT" = LRT, "Pr(>Chi)" = probLRT))
+}
+
+compare.nested.models(model.wo.t2, model)
+
+# We performed a hypothesis test where the null hypothesis was that there is no quadratic effect of t vs
+# the alternative hypothesis that there exists a non-neglectable quadratic effect of t.
+# The likehood-ratio test gives that if H_0 is correct it is only a 0.0005524157 probability to observe
+# a equally or more extreme result. Based on this we reject the null hypothesis and conclude that there is
+# evidence of a quadratic effect of t.
+
+# Comparing results to built-in functions
+model.compare = glm(y ~ t + I(t^2), family = "poisson", data = data)
+drop1(model.compare, test="LRT")
+
+#2e)
+
+goodness.of.fit = function(model) {
+  prob = pchisq(model$Deviance, model$n - model$p, lower.tail = FALSE)
+  m = matrix(c(model$Deviance, prob), ncol = 2)
+  colnames(m) = c("Deviance", "Pr(>Chi)")
+  rownames(m) = "Model"
+  return(m)
+}
+
+goodness.of.fit(model)
+
+#The model fits the data quite well, at least according to a goodness of fit test using deviance.
+
+ggplot(df.birds, aes(y)) + geom_bar()
+
+
+min.t = min(df.birds$t)
+exp(1 * beta[1] + min.t * beta[2] + min.t^2 * beta[3])
+
+# It is difficult to assess from the plot above whether model assumptions are violated, since it is a
+# combined histogram from a mix of different poission models (different expectation and variance).
+# However, we still notice that there is unusually many observations with y_i = 0. Especially since the
+# smallest t-value in the dataset is 5, indicating an expectation of at least 5.833 for each of the
+# assumed poisson-distributed y_i. Considering this, it is highly unlikely to observe as many zeros as we
+# in our data set. We therefore believe that the assumption of each y_i being poisson-distributed is violated.
+# However, excluding the y_i = 0 observations, the rest appear to be approximately poisson-distributed.
