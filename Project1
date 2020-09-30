@@ -1,7 +1,7 @@
-
 library(pracma)
 library(ggplot2)
 
+#1b)
 vec2diag = function(vec) {
   m = diag(length(vec))
   for (i in 1:length(vec)) {
@@ -17,6 +17,7 @@ diag2vec = function(m) {
   }
   return (vec)
 }
+
 
 myglm = function(formula, data, start = rep(0, ncol(model.matrix(formula, data)))) {
   n = nrow(data)
@@ -48,6 +49,7 @@ mymodel = myglm(y ~ t, data, start = c(0.1,0.001))
 mymodel$Coefficients
 mymodel$Deviance
 mymodel$vcov
+
 
 
 #c)
